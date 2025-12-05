@@ -1,0 +1,158 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  MANAGER
+  MEMBER
+}
+
+enum TaskFrequency {
+  ONCE
+  DAILY
+  WEEKLY
+  MONTHLY
+  UNKNOWN
+}
+
+enum TaskPriority {
+  LOW
+  NORMAL
+  HIGH
+}
+
+enum TaskStatus {
+  OPEN
+  DONE
+  SKIPPED
+}
+
+enum AiImportStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+model Company {
+  id            String         @id @default(cuid())
+  name          String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  users         User[]
+  taskLists     TaskList[]
+  taskInstances TaskInstance[]
+  managerNotes  ManagerNote[]
+  aiImports     AiImport[]
+}
+
+model User {
+  id                     String         @id @default(cuid())
+  name                   String?
+  email                  String         @unique
+  hashedPassword         String
+  role                   UserRole       @default(MEMBER)
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+  companyId              String
+  company                Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  taskListsCreated       TaskList[]     @relation("TaskListCreatedBy")
+  taskInstancesAssigned  TaskInstance[] @relation("TaskInstanceAssignee")
+  taskInstancesCompleted TaskInstance[] @relation("TaskInstanceCompletedBy")
+  managerNotes           ManagerNote[]  @relation("ManagerNoteCreatedBy")
+  aiImports              AiImport[]
+}
+
+model TaskList {
+  id               String        @id @default(cuid())
+  companyId        String
+  company          Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name             String
+  description      String?
+  location         String?
+  groupName        String?
+  createdByUserId  String
+  createdBy        User          @relation("TaskListCreatedBy", fields: [createdByUserId], references: [id])
+  defaultFrequency TaskFrequency @default(UNKNOWN)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  tasks            Task[]
+
+  @@index([companyId])
+}
+
+model Task {
+  id               String         @id @default(cuid())
+  taskListId       String
+  taskList         TaskList       @relation(fields: [taskListId], references: [id], onDelete: Cascade)
+  title            String
+  description      String?
+  category         String?
+  defaultFrequency TaskFrequency  @default(UNKNOWN)
+  defaultPriority  TaskPriority   @default(NORMAL)
+  isActive         Boolean        @default(true)
+  sortOrder        Int            @default(0)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  taskInstances    TaskInstance[]
+
+  @@index([taskListId])
+}
+
+model TaskInstance {
+  id                String     @id @default(cuid())
+  companyId         String
+  company           Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  taskId            String
+  task              Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  date              DateTime
+  status            TaskStatus @default(OPEN)
+  note              String?
+  assignedToUserId  String?
+  assignedTo        User?      @relation("TaskInstanceAssignee", fields: [assignedToUserId], references: [id])
+  completedAt       DateTime?
+  completedByUserId String?
+  completedBy       User?      @relation("TaskInstanceCompletedBy", fields: [completedByUserId], references: [id])
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  @@unique([taskId, date])
+  @@index([companyId, date])
+  @@index([assignedToUserId])
+}
+
+model ManagerNote {
+  id              String   @id @default(cuid())
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  date            DateTime
+  content         String   @default("")
+  createdByUserId String
+  createdBy       User     @relation("ManagerNoteCreatedBy", fields: [createdByUserId], references: [id])
+  updatedAt       DateTime @updatedAt
+
+  @@unique([companyId, date])
+  @@index([companyId, date])
+}
+
+model AiImport {
+  id               String         @id @default(cuid())
+  companyId        String
+  company          Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User           @relation(fields: [userId], references: [id])
+  originalFileName String
+  originalMimeType String
+  storagePath      String?
+  extractedRawText String?
+  extractedJson    Json?
+  status           AiImportStatus @default(PENDING)
+  createdAt        DateTime       @default(now())
+
+  @@index([companyId])
+  @@index([userId])
+}
